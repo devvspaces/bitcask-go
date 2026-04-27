@@ -1,6 +1,9 @@
 package internal
 
-import "fmt"
+import (
+	"encoding/binary"
+	"fmt"
+)
 
 const (
 	OP_GET uint8 = 0
@@ -22,9 +25,15 @@ func FormatPut(key string, val string) []byte {
 	buffer := make([]byte, 0)
 	buffer = append(buffer, OP_PUT, uint8(len(key)))
 	buffer = append(buffer, []byte(key)...)
-	buffer = append(buffer, uint8(len(val)))
+
+	// Convert uint16 to bytes first
+	valSizeBuf := make([]byte, 2)
+	binary.BigEndian.PutUint16(valSizeBuf, uint16(len(val)))
+
+	buffer = append(buffer, valSizeBuf...)
 	buffer = append(buffer, []byte(val)...)
 	fmt.Printf("MESSAGE is: [%s]\n", string(buffer))
+	fmt.Printf("MESSAGE is: [%v]\n", buffer)
 	return buffer
 }
 

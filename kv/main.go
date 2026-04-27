@@ -1,16 +1,25 @@
 package main
 
 import (
+	"bitcask-go/kv/internal/hashmap"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
+	"time"
 )
 
 const (
 	SOCKET = "/tmp/go-cask-kv.sock"
+	DIR    = "./dir"
+)
+
+var (
+	SEGMENT_FILE_PATH = filepath.Join(DIR, "segment.bin")
 )
 
 const (
@@ -36,6 +45,22 @@ func run() error {
 
 	// run clean go routine
 	go cleanup()
+
+	// Ensure dir directory exists
+	err = os.Mkdir(DIR, 0755)
+	if err != nil && !os.IsExist(err) {
+		return err
+	}
+
+	// Create db file
+	f, err := os.OpenFile(SEGMENT_FILE_PATH, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("Failed to create segment file: %s", err.Error())
+	}
+	f.Close()
+
+	// Create hash index
+	hashmap.Init()
 
 	fmt.Println("Listening on " + SOCKET)
 	fmt.Println("Waiting for client...")
@@ -109,14 +134,38 @@ func processConn(conn net.Conn) error {
 	if err != nil {
 		return fmt.Errorf("Failed to read key data: %s", err.Error())
 	}
+	key := string(keyBuf)
 
 	switch opCode {
 	case OP_GET:
-		fmt.Printf("This is a GET operation to fetch key: %s\n", string(keyBuf))
+		lod := hashmap.Get(key)
+
+		// Open segment for reading
+		f, err := os.Open(SEGMENT_FILE_PATH)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		_, err = f.Seek(int64(lod.ValuePos), io.SeekStart)
+		if err != nil {
+			return err
+		}
+
+		buf := make([]byte, lod.ValueSize)
+		_, err = io.ReadAtLeast(f, buf, int(lod.ValueSize))
+		if err != nil {
+			return err
+		}
+
+		_, err = conn.Write(buf)
+		if err != nil {
+			return err
+		}
 	case OP_DEL:
-		fmt.Printf("This is a DEL operation to delete key: %s\n", string(keyBuf))
+		fmt.Printf("This is a DEL operation to delete key: %s\n", key)
 	case OP_PUT:
-		// 3. Read data size
+		// Read data size
 		dBuf, err := _read(conn, 2)
 		if err != nil {
 			return fmt.Errorf("Failed to read data size: %s", err.Error())
@@ -128,11 +177,52 @@ func processConn(conn net.Conn) error {
 		if err != nil {
 			return fmt.Errorf("Failed to read value data: %s", err.Error())
 		}
-		fmt.Printf("This is a PUT operation to insert key: %s and value: %s\n", string(keyBuf), string(valBuf))
+		fmt.Printf("This is a PUT operation to insert key: %s and value: %s\n", key, string(valBuf))
+
+		// Prepare data to write
+		data := make([]byte, 0)
+		tstamp := uint64(time.Now().Unix())
+		btstamp := make([]byte, 8)
+		binary.BigEndian.PutUint64(btstamp, tstamp)
+		data = append(data, btstamp...)
+		data = append(data, keySize)
+		data = append(data, dBuf...)
+		data = append(data, keyBuf...)
+		data = append(data, valBuf...)
+
+		// Open segment for writing
+		f, err := os.OpenFile(SEGMENT_FILE_PATH, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		_, err = f.Write(data)
+		if err != nil {
+			return err
+		}
+		err = f.Sync()
+		if err != nil {
+			return err
+		}
+		endPos, _ := f.Seek(0, io.SeekCurrent)
+		valuePos := endPos - int64(dataSize)
+
+		// Now we need to update the hash map
+		hashmap.Upsert(key, hashmap.Dir{
+			FileId:    SEGMENT_FILE_PATH,
+			Timestamp: tstamp,
+			ValueSize: dataSize,
+			ValuePos:  uint64(valuePos),
+		})
+
+		_, err = conn.Write([]byte("Success!"))
+		if err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("Invalid OPCODE")
 	}
 
-	_, err = conn.Write([]byte("Thanks! Got your message:"))
 	return nil
 }

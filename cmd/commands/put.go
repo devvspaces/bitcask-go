@@ -33,7 +33,7 @@ func put(cmd *cobra.Command, args []string) {
 		fmt.Println("Key length can't be greater than 255 characters")
 		os.Exit(1)
 	}
-	val := args[0]
+	val := args[1]
 	if len(val) > math.MaxUint16 {
 		fmt.Println("Key length can't be greater than 255 characters")
 		os.Exit(1)

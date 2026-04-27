@@ -1,7 +1,9 @@
 # Bitcask Simple Key-Value Store database in Golang
+
 https://riak.com/assets/bitcask-intro.pdf
 
 ## Goals
+
 1. DB Write - store data in file
 2. DB Read - be able to read data
 3. Handle file compaction
@@ -45,3 +47,13 @@ We would represent our data length with 2 bytes giving us a maximum of approxima
 we can read this based on the data length
 
 Note: we can improve this protocol later
+
+## Database File Format
+
+SEGMENT would be in binary to save space and for easy write
+
+SEGMENT FILE:
+tstamp|key_size|value_sz|key|value
+
+MEM MAP: Memory map
+key -> file_id|tstamp|value_sz|value_pos

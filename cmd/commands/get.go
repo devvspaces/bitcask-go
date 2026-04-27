@@ -53,8 +53,8 @@ func get(cmd *cobra.Command, args []string) {
 	mLen, err := conn.Read(buffer)
 	if err != nil {
 		fmt.Println("Error reading:", err.Error())
+	} else {
+		// print response
+		fmt.Println("Received: ", string(buffer[:mLen]))
 	}
-
-	// print response
-	fmt.Println("Received: ", string(buffer[:mLen]))
 }
