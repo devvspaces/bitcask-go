@@ -2,7 +2,6 @@ package internal
 
 import (
 	"encoding/binary"
-	"fmt"
 )
 
 const (
@@ -16,7 +15,6 @@ func FormatGet(key string) []byte {
 	buffer := make([]byte, 0)
 	buffer = append(buffer, OP_GET, uint8(len(key)))
 	buffer = append(buffer, []byte(key)...)
-	fmt.Printf("MESSAGE is: [%s]\n", string(buffer))
 	return buffer
 }
 
@@ -32,8 +30,6 @@ func FormatPut(key string, val string) []byte {
 
 	buffer = append(buffer, valSizeBuf...)
 	buffer = append(buffer, []byte(val)...)
-	fmt.Printf("MESSAGE is: [%s]\n", string(buffer))
-	fmt.Printf("MESSAGE is: [%v]\n", buffer)
 	return buffer
 }
 
@@ -42,6 +38,5 @@ func FormatDel(key string) []byte {
 	buffer := make([]byte, 0)
 	buffer = append(buffer, OP_DEL, uint8(len(key)))
 	buffer = append(buffer, []byte(key)...)
-	fmt.Printf("MESSAGE is: [%s]\n", string(buffer))
 	return buffer
 }
